@@ -410,11 +410,15 @@
         <div class="field field-row">
           <div>
             <label>Year</label>
-            <input type="text" id="gen-year" maxlength="2" placeholder="26" style="font-family:var(--mono);" />
+            <input type="text" id="gen-year" maxlength="4" placeholder="2026" style="font-family:var(--mono);" />
           </div>
           <div style="display:flex;align-items:flex-end;">
             <button class="btn btn-ghost btn-sm" id="reset-year-btn" style="width:100%;justify-content:center;">Reset</button>
           </div>
+        </div>
+        <div class="field">
+          <label>Created By</label>
+          <input type="text" id="gen-creator" readonly style="background:var(--surface2);color:var(--text-muted);cursor:default;" />
         </div>
         <button class="btn-generate" id="generate-btn">⚡ Generate Project Number</button>
         <div class="result-box" id="result-box">
@@ -452,7 +456,8 @@
             <th data-col="clientName">Client <span class="sort-arrow"></span></th>
             <th data-col="projectName">Project Name <span class="sort-arrow"></span></th>
             <th data-col="year">Year <span class="sort-arrow"></span></th>
-            <th data-col="created">Created <span class="sort-arrow"></span></th>
+            <th data-col="creatorName">Created By <span class="sort-arrow"></span></th>
+            <th data-col="created">Date <span class="sort-arrow"></span></th>
             <th></th>
           </tr>
         </thead>
@@ -653,6 +658,7 @@ async function loadAll() {
     projectName: i.fields.ProjectName || '',
     year:        i.fields.ProjYear || '',
     sequence:    i.fields.Sequence || 0,
+    creatorName: i.fields.CreatorName || '',
     created:     i.fields.Created || i.createdDateTime || ''
   }));
 }
@@ -764,6 +770,7 @@ function renderLog() {
         <td><div class="td-client"><span class="chip">${p.clientCode}</span><span>${p.clientName}</span></div></td>
         <td>${p.projectName || '<span style="color:var(--text-muted);font-style:italic;">—</span>'}</td>
         <td>20${p.year}</td>
+        <td>${p.creatorName || '<span style="color:var(--text-muted);font-style:italic;">—</span>'}</td>
         <td class="td-date">${formatDate(p.created)}</td>
         <td style="text-align:right;white-space:nowrap;">
           <button class="btn btn-ghost btn-sm" onclick="openEdit('${p.spId}')" title="Edit name">✎</button>
@@ -851,12 +858,12 @@ function removeClient(spId) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Generate
 // ─────────────────────────────────────────────────────────────────────────────
-document.getElementById('gen-year').value = currentYY();
+document.getElementById('gen-year').value = String(new Date().getFullYear());
 document.getElementById('reset-year-btn').addEventListener('click', () => {
-  document.getElementById('gen-year').value = currentYY();
+  document.getElementById('gen-year').value = String(new Date().getFullYear());
 });
 document.getElementById('gen-year').addEventListener('input', function() {
-  this.value = this.value.replace(/\D/g, '').slice(0, 2);
+  this.value = this.value.replace(/\D/g, '').slice(0, 4);
 });
 
 let lastGeneratedSpId = null;
@@ -864,10 +871,12 @@ let lastGeneratedSpId = null;
 document.getElementById('generate-btn').addEventListener('click', async () => {
   const clientSpId  = document.getElementById('gen-client').value;
   const projectName = document.getElementById('gen-project-name').value.trim();
-  const year        = document.getElementById('gen-year').value.trim();
+  const yearFull    = document.getElementById('gen-year').value.trim();
+  const creator     = document.getElementById('gen-creator').value.trim();
 
   if (!clientSpId) { showToast('Please select a client.', true); return; }
-  if (!year || year.length !== 2) { showToast('Enter a valid 2-digit year.', true); return; }
+  if (!yearFull || yearFull.length !== 4) { showToast('Enter a valid 4-digit year (e.g. 2026).', true); return; }
+  const year = yearFull.slice(-2);
 
   const client = clients.find(c => c.spId === clientSpId);
   if (!client) return;
@@ -878,18 +887,19 @@ document.getElementById('generate-btn').addEventListener('click', async () => {
   try {
     setLoading('Saving project number…');
     const item = await createItem(_projectsListId, {
-      Title:       number,
-      ClientSpId:  clientSpId,
-      ClientCode:  client.code,
-      ClientName:  client.name,
-      ProjectName: projectName,
-      ProjYear:    year,
-      Sequence:    seq
+      Title:        number,
+      ClientSpId:   clientSpId,
+      ClientCode:   client.code,
+      ClientName:   client.name,
+      ProjectName:  projectName,
+      ProjYear:     year,
+      Sequence:     seq,
+      CreatorName:  creator
     });
     const proj = {
       spId: String(item.id), number,
       clientSpId, clientCode: client.code, clientName: client.name,
-      projectName, year, sequence: seq,
+      projectName, year, sequence: seq, creatorName: creator,
       created: item.fields?.Created || new Date().toISOString()
     };
     projects.push(proj);
@@ -1131,8 +1141,10 @@ async function bootApp() {
     await loadAll();
     const accounts = msalInstance.getAllAccounts();
     if (accounts.length) {
-      document.getElementById('user-info').textContent = accounts[0].name || accounts[0].username;
+      const displayName = accounts[0].name || accounts[0].username;
+      document.getElementById('user-info').textContent = displayName;
       document.getElementById('sign-out-btn').style.display = '';
+      document.getElementById('gen-creator').value = displayName;
     }
     document.getElementById('login-screen').classList.add('hidden');
     render();
