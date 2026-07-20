@@ -489,7 +489,7 @@ const msalConfig = {
   auth: {
     clientId: HSDL_CONFIG.clientId,
     authority: `https://login.microsoftonline.com/${HSDL_CONFIG.tenantId}`,
-    redirectUri: new URL('redirect.html', window.location.href).href
+    redirectUri: window.location.href.split('?')[0].split('#')[0]
   },
   cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true }
 };
@@ -1054,6 +1054,13 @@ async function bootApp() {
 // Init
 // ─────────────────────────────────────────────────────────────────────────────
 (async function init() {
+  // If we're loaded inside a popup (OAuth redirect), just handle the response
+  // and let MSAL close the popup — don't boot the full app
+  if (window.opener && window.opener !== window) {
+    try { await msalInstance.handleRedirectPromise(); } catch (e) { console.error(e); }
+    return;
+  }
+
   try {
     await msalInstance.handleRedirectPromise();
   } catch {}
