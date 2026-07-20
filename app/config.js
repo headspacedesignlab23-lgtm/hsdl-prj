@@ -6,10 +6,10 @@
 window.HSDL_CONFIG = {
 
   // Azure AD → App Registrations → Your App → Application (client) ID
-  clientId: "",
+  clientId: "84bcef2c-6c03-47db-ad52-e312a928614e",
 
   // Azure AD → App Registrations → Your App → Directory (tenant) ID
-  tenantId: "",
+  tenantId: "51b24c19-4762-49c6-849c-f1b907ff2798",
 
   // Full URL of the SharePoint site where your lists will live
   // e.g. "https://headspacedl.sharepoint.com/sites/HSDL"
