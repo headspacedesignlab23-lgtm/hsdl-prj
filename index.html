@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HSDL Project Number Generator</title>
+  <script src="msal-browser.min.js"></script>
+  <script src="config.js"></script>
+  <style>
+    :root {
+      --bg: #f5f5f0;
+      --surface: #ffffff;
+      --surface2: #f0efeb;
+      --border: #ddddd8;
+      --text: #1a1a1a;
+      --text-muted: #6b6b6b;
+      --accent: #1a3a2a;
+      --accent-hover: #254d39;
+      --accent-light: #e8f0ec;
+      --danger: #c0392b;
+      --danger-light: #fdecea;
+      --mono: 'SF Mono', 'Fira Mono', 'Consolas', monospace;
+      --radius: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--accent);
+      color: #fff;
+      padding: 0 32px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
+    .header-right { display: flex; align-items: center; gap: 16px; }
+    #user-info { font-size: 12px; opacity: 0.75; }
+    #sign-out-btn {
+      font-size: 12px; color: rgba(255,255,255,0.7);
+      background: none; border: 1px solid rgba(255,255,255,0.25);
+      padding: 4px 10px; border-radius: 5px; cursor: pointer;
+    }
+    #sign-out-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    #project-count-header { font-size: 12px; opacity: 0.65; font-family: var(--mono); }
+
+    /* ── Layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 24px;
+      padding: 24px 32px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    /* ── Panel ── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--surface2);
+    }
+    .panel-header h2 {
+      font-size: 12px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted);
+    }
+    .panel-body { padding: 18px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: var(--radius);
+      border: none; cursor: pointer; font-size: 13px; font-weight: 500;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--surface2); }
+    .btn-danger { background: transparent; color: var(--danger); border: 1px solid transparent; }
+    .btn-danger:hover { background: var(--danger-light); }
+    .btn-generate {
+      width: 100%; padding: 12px; font-size: 14px; font-weight: 600;
+      background: var(--accent); color: #fff; border-radius: var(--radius);
+      border: none; cursor: pointer; margin-top: 6px; letter-spacing: 0.02em;
+      transition: background 0.15s;
+    }
+    .btn-generate:hover { background: var(--accent-hover); }
+    .btn-generate:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Form ── */
+    label {
+      display: block; font-size: 12px; font-weight: 500;
+      color: var(--text-muted); margin-bottom: 5px;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    input, select {
+      width: 100%; padding: 9px 11px;
+      border: 1px solid var(--border); border-radius: var(--radius);
+      font-size: 13px; background: var(--surface); color: var(--text);
+      outline: none; transition: border-color 0.15s;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    .field { margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+    .field-row { display: grid; grid-template-columns: 1fr 80px; gap: 8px; }
+
+    /* ── Client list ── */
+    .client-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+    .client-item {
+      display: flex; align-items: center;
+      padding: 9px 12px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: var(--radius);
+    }
+    .client-item .code {
+      font-family: var(--mono); font-size: 12px; font-weight: 600;
+      color: var(--accent); background: var(--accent-light);
+      padding: 2px 7px; border-radius: 4px; min-width: 38px; text-align: center;
+    }
+    .client-item .name {
+      font-size: 13px; font-weight: 500; flex: 1;
+      margin-left: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .client-item .count { font-size: 11px; color: var(--text-muted); margin-right: 6px; }
+    .empty-state { text-align: center; color: var(--text-muted); padding: 24px 0; font-size: 12px; }
+
+    .add-client-form { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); display: none; }
+    .add-client-form.open { display: block; }
+
+    /* ── Result box ── */
+    .result-box {
+      margin-top: 14px; background: var(--accent-light);
+      border: 1px solid #b5d0bf; border-radius: var(--radius);
+      padding: 16px 18px; display: none;
+    }
+    .result-box.visible { display: block; }
+    .result-label { font-size: 11px; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
+    .result-number { font-family: var(--mono); font-size: 28px; font-weight: 700; color: var(--accent); letter-spacing: 0.04em; }
+    .result-name { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+    /* ── Log table ── */
+    .log-controls { display: flex; align-items: center; gap: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      text-align: left; padding: 10px 12px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-muted);
+      border-bottom: 2px solid var(--border); white-space: nowrap;
+      cursor: pointer; user-select: none;
+    }
+    thead th:hover { color: var(--text); }
+    thead th.sorted { color: var(--accent); }
+    thead th .sort-arrow { margin-left: 4px; opacity: 0.5; }
+    thead th.sorted .sort-arrow { opacity: 1; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:hover { background: var(--surface2); }
+    tbody tr:last-child { border-bottom: none; }
+    td { padding: 10px 12px; }
+    .td-number { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent); }
+    .td-client { display: flex; align-items: center; gap: 8px; }
+    .chip { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-light); padding: 2px 6px; border-radius: 4px; }
+    .td-date { color: var(--text-muted); font-size: 12px; }
+    .table-footer {
+      padding: 12px 18px; border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--surface2);
+    }
+    .table-footer span { font-size: 12px; color: var(--text-muted); }
+
+    /* ── Loading overlay ── */
+    #loading-overlay {
+      position: fixed; inset: 0; background: rgba(245,245,240,0.85);
+      z-index: 200; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+    }
+    #loading-overlay.hidden { display: none; }
+    .spinner {
+      width: 36px; height: 36px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-message { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+
+    /* ── Login screen ── */
+    #login-screen {
+      position: fixed; inset: 0; background: var(--bg);
+      z-index: 300; display: flex; align-items: center; justify-content: center;
+    }
+    #login-screen.hidden { display: none; }
+    .login-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 48px 40px; text-align: center;
+      max-width: 380px; box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+    .login-logo {
+      font-size: 13px; font-weight: 700; color: var(--accent);
+      letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;
+    }
+    .login-card h2 { font-size: 20px; margin-bottom: 8px; }
+    .login-card p { font-size: 13px; color: var(--text-muted); margin-bottom: 28px; line-height: 1.5; }
+    .btn-ms-login {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: #0078d4; color: #fff; border: none;
+      padding: 12px 24px; border-radius: var(--radius);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-ms-login:hover { background: #106ebe; }
+    .btn-ms-login svg { width: 18px; height: 18px; }
+    #login-error { margin-top: 14px; font-size: 12px; color: var(--danger); display: none; }
+
+    /* ── Setup error screen ── */
+    #setup-screen {
+      position: fixed; inset: 0; background: var(--bg);
+      z-index: 400; display: flex; align-items: center; justify-content: center;
+    }
+    #setup-screen.hidden { display: none; }
+    .setup-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 40px; max-width: 480px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+    .setup-card h2 { font-size: 18px; margin-bottom: 12px; color: var(--accent); }
+    .setup-card p { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 10px; }
+    .setup-card code {
+      background: var(--surface2); border: 1px solid var(--border);
+      padding: 2px 6px; border-radius: 4px; font-family: var(--mono); font-size: 12px;
+    }
+
+    /* ── Modals ── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+      z-index: 100; display: none; align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border-radius: var(--radius);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+      padding: 24px; width: 380px; max-width: 95vw;
+    }
+    .modal h3 { font-size: 15px; margin-bottom: 16px; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+    /* ── Footer ── */
+    footer {
+      position: fixed; bottom: 0; left: 0; right: 0; height: 36px;
+      background: var(--surface2); border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; font-size: 11px; color: var(--text-muted);
+      letter-spacing: 0.03em; z-index: 40;
+    }
+    .layout { padding-bottom: 60px; }
+
+    /* ── Random name button ── */
+    .name-field-wrap { display: flex; gap: 6px; }
+    .name-field-wrap input { flex: 1; }
+    .btn-dice {
+      flex-shrink: 0; width: 36px; height: 36px; border-radius: var(--radius);
+      border: 1px solid var(--border); background: var(--surface2);
+      font-size: 16px; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; transition: background 0.15s;
+    }
+    .btn-dice:hover { background: var(--accent-light); }
+
+    /* ── Delete confirmation input ── */
+    .delete-confirm-wrap { margin-top: 12px; }
+    .delete-confirm-wrap label { color: var(--danger); }
+    .delete-confirm-wrap input { border-color: var(--border); }
+    .delete-confirm-wrap input:focus { border-color: var(--danger); }
+    #delete-confirm-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 44px; right: 24px;
+      background: var(--accent); color: #fff; padding: 10px 18px;
+      border-radius: var(--radius); font-size: 13px; font-weight: 500;
+      opacity: 0; transform: translateY(8px);
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none; z-index: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.error { background: var(--danger); }
+  </style>
+</head>
+<body>
+
+<!-- ── Setup error (config.js not filled in) ── -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <h2>Setup Required</h2>
+    <p>The app hasn't been configured yet. Open <code>app/config.js</code> and fill in your Azure AD and SharePoint details.</p>
+    <p>Full instructions are in <code>setup/README.md</code>.</p>
+  </div>
+</div>
+
+<!-- ── Login screen ── -->
+<div id="login-screen" class="hidden">
+  <div class="login-card">
+    <div class="login-logo">HSDL</div>
+    <h2>Project Number Generator</h2>
+    <p>Sign in with your Microsoft 365 account to access the shared project log.</p>
+    <button class="btn-ms-login" id="sign-in-btn">
+      <svg viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+        <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+        <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+        <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+      </svg>
+      Sign in with Microsoft
+    </button>
+    <div id="login-error"></div>
+  </div>
+</div>
+
+<!-- ── Loading overlay ── -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div id="loading-message">Loading…</div>
+</div>
+
+<!-- ── Main app ── -->
+<header>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <img src="logo.png" alt="HSDL" style="height:26px;opacity:0.92;filter:brightness(0) invert(1);" onerror="this.style.display='none'" />
+    <h1>Project Number Generator</h1>
+  </div>
+  <div class="header-right">
+    <span id="user-info"></span>
+    <button id="sign-out-btn">Sign out</button>
+    <span id="project-count-header">0 projects</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- LEFT -->
+  <div style="display:flex;flex-direction:column;gap:20px;position:sticky;top:80px;align-self:start;">
+
+    <!-- Clients -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Clients</h2>
+        <button class="btn btn-sm btn-ghost" id="toggle-add-client">+ Add</button>
+      </div>
+      <div class="panel-body">
+        <div class="client-list" id="client-list">
+          <div class="empty-state">Loading…</div>
+        </div>
+        <div class="add-client-form" id="add-client-form">
+          <div class="field field-row">
+            <div>
+              <label>Client Name</label>
+              <input type="text" id="new-client-name" placeholder="e.g. Bell Sports" autocomplete="off" />
+            </div>
+            <div>
+              <label>Code</label>
+              <input type="text" id="new-client-code" placeholder="BEL" maxlength="3"
+                style="text-transform:uppercase;font-family:var(--mono);font-weight:600;" autocomplete="off" />
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary btn-sm" id="save-client-btn">Save Client</button>
+            <button class="btn btn-ghost btn-sm" id="cancel-add-client">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generate -->
+    <div class="panel">
+      <div class="panel-header"><h2>Generate</h2></div>
+      <div class="panel-body">
+        <div class="field">
+          <label>Client</label>
+          <select id="gen-client">
+            <option value="">— select a client —</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Project Name <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional — click 🎲 to suggest one)</span></label>
+          <div class="name-field-wrap">
+            <input type="text" id="gen-project-name" placeholder="e.g. Road Helmet Redesign" autocomplete="off" />
+            <button class="btn-dice" id="random-name-btn" title="Suggest a random project name">🎲</button>
+          </div>
+        </div>
+        <div class="field field-row">
+          <div>
+            <label>Year</label>
+            <input type="text" id="gen-year" maxlength="2" placeholder="26" style="font-family:var(--mono);" />
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn btn-ghost btn-sm" id="reset-year-btn" style="width:100%;justify-content:center;">Reset</button>
+          </div>
+        </div>
+        <button class="btn-generate" id="generate-btn">⚡ Generate Project Number</button>
+        <div class="result-box" id="result-box">
+          <div class="result-label">Project Number</div>
+          <div class="result-number" id="result-number">—</div>
+          <div class="result-name" id="result-name"></div>
+          <div style="margin-top:12px;display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" id="copy-btn">Copy</button>
+            <button class="btn btn-danger btn-sm" id="undo-btn">Undo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: Project Log -->
+  <div class="panel" style="display:flex;flex-direction:column;">
+    <div class="panel-header">
+      <h2>Project Log</h2>
+      <div class="log-controls">
+        <input type="text" id="search-input" placeholder="Search…" style="width:160px;" />
+        <select id="filter-client" style="width:130px;">
+          <option value="">All clients</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" id="export-csv-btn">Export CSV</button>
+        <button class="btn btn-ghost btn-sm" id="refresh-btn">↻ Refresh</button>
+      </div>
+    </div>
+    <div style="flex:1;overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th data-col="number" class="sorted">Project No. <span class="sort-arrow">▲</span></th>
+            <th data-col="clientName">Client <span class="sort-arrow"></span></th>
+            <th data-col="projectName">Project Name <span class="sort-arrow"></span></th>
+            <th data-col="year">Year <span class="sort-arrow"></span></th>
+            <th data-col="created">Created <span class="sort-arrow"></span></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="project-tbody"></tbody>
+      </table>
+      <div class="empty-state" id="log-empty" style="padding:40px 0;display:none;">
+        No projects yet. Generate your first one →
+      </div>
+    </div>
+    <div class="table-footer">
+      <span id="log-count">0 projects</span>
+      <span id="log-filter-info"></span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Delete modal -->
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal">
+    <h3 id="delete-modal-title">Confirm deletion</h3>
+    <p style="font-size:13px;color:var(--text-muted);" id="delete-modal-desc"></p>
+    <div class="delete-confirm-wrap">
+      <label id="delete-confirm-label">Type to confirm</label>
+      <input type="text" id="delete-confirm-input" placeholder="" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="delete-cancel-btn">Cancel</button>
+      <button class="btn btn-sm" id="delete-confirm-btn" style="background:var(--danger);color:#fff;" disabled>Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit modal -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h3>Edit Project Name</h3>
+    <div class="field">
+      <label>Project Name</label>
+      <input type="text" id="edit-name-input" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="edit-cancel-btn">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="edit-save-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>Private &amp; Confidential — Headspace Design Lab</span>
+  <span id="footer-last-project"></span>
+</footer>
+
+<div id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// Config check
+// ─────────────────────────────────────────────────────────────────────────────
+(function() {
+  const c = window.HSDL_CONFIG;
+  if (!c || !c.clientId || !c.tenantId || !c.siteUrl) {
+    document.getElementById('setup-screen').classList.remove('hidden');
+    document.getElementById('loading-overlay').classList.add('hidden');
+    throw new Error('Config not set — see setup/README.md');
+  }
+  document.getElementById('setup-screen').classList.add('hidden');
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MSAL
+// ─────────────────────────────────────────────────────────────────────────────
+const msalConfig = {
+  auth: {
+    clientId: HSDL_CONFIG.clientId,
+    authority: `https://login.microsoftonline.com/${HSDL_CONFIG.tenantId}`,
+    redirectUri: window.location.href.split('?')[0].split('#')[0]
+  },
+  cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true }
+};
+const msalInstance = new msal.PublicClientApplication(msalConfig);
+const SCOPES = ['https://graph.microsoft.com/Sites.ReadWrite.All'];
+
+async function getToken() {
+  const accounts = msalInstance.getAllAccounts();
+  if (!accounts.length) throw new Error('Not signed in');
+  try {
+    const r = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
+    return r.accessToken;
+  } catch {
+    // Silent failed — redirect to re-authenticate
+    await msalInstance.acquireTokenRedirect({ scopes: SCOPES, account: accounts[0] });
+    throw new Error('Redirecting for re-authentication…');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Graph API
+// ─────────────────────────────────────────────────────────────────────────────
+const GRAPH = 'https://graph.microsoft.com/v1.0';
+let _siteId = null, _clientsListId = null, _projectsListId = null;
+
+async function graphFetch(url, opts = {}) {
+  const token = await getToken();
+  const res = await fetch(url, {
+    ...opts,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(opts.headers || {})
+    }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${res.status}`);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+async function getSiteId() {
+  if (_siteId) return _siteId;
+  const u = new URL(HSDL_CONFIG.siteUrl);
+  const data = await graphFetch(`${GRAPH}/sites/${u.hostname}:${u.pathname}`);
+  _siteId = data.id;
+  return _siteId;
+}
+
+async function getListId(name) {
+  const sid = await getSiteId();
+  const data = await graphFetch(
+    `${GRAPH}/sites/${sid}/lists?$filter=displayName eq '${encodeURIComponent(name)}'&$select=id,displayName`
+  );
+  if (!data.value.length) throw new Error(`SharePoint list "${name}" not found. Check your config or setup guide.`);
+  return data.value[0].id;
+}
+
+async function ensureIds() {
+  if (!_clientsListId)  _clientsListId  = await getListId(HSDL_CONFIG.clientsListName);
+  if (!_projectsListId) _projectsListId = await getListId(HSDL_CONFIG.projectsListName);
+}
+
+async function getAllItems(listId) {
+  const sid = await getSiteId();
+  let url = `${GRAPH}/sites/${sid}/lists/${listId}/items?expand=fields&$top=5000`;
+  const items = [];
+  while (url) {
+    const data = await graphFetch(url);
+    items.push(...data.value);
+    url = data['@odata.nextLink'] || null;
+  }
+  return items;
+}
+
+async function createItem(listId, fields) {
+  const sid = await getSiteId();
+  return graphFetch(`${GRAPH}/sites/${sid}/lists/${listId}/items`, {
+    method: 'POST',
+    body: JSON.stringify({ fields })
+  });
+}
+
+async function updateItemFields(listId, itemId, fields) {
+  const sid = await getSiteId();
+  return graphFetch(`${GRAPH}/sites/${sid}/lists/${listId}/items/${itemId}/fields`, {
+    method: 'PATCH',
+    body: JSON.stringify(fields)
+  });
+}
+
+async function deleteItem(listId, itemId) {
+  const sid = await getSiteId();
+  return graphFetch(`${GRAPH}/sites/${sid}/lists/${listId}/items/${itemId}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// In-memory state (hydrated from SharePoint)
+// ─────────────────────────────────────────────────────────────────────────────
+let clients = [];   // { spId, name, code }
+let projects = [];  // { spId, number, clientSpId, clientCode, clientName, projectName, year, sequence, created }
+
+async function loadAll() {
+  await ensureIds();
+  const [cItems, pItems] = await Promise.all([
+    getAllItems(_clientsListId),
+    getAllItems(_projectsListId)
+  ]);
+  clients = cItems.map(i => ({
+    spId: String(i.id),
+    name: i.fields.Title || '',
+    code: i.fields.ClientCode || ''
+  }));
+  projects = pItems.map(i => ({
+    spId: String(i.id),
+    number:      i.fields.Title || '',
+    clientSpId:  i.fields.ClientSpId || '',
+    clientCode:  i.fields.ClientCode || '',
+    clientName:  i.fields.ClientName || '',
+    projectName: i.fields.ProjectName || '',
+    year:        i.fields.ProjYear || '',
+    sequence:    i.fields.Sequence || 0,
+    created:     i.fields.Created || i.createdDateTime || ''
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Utilities
+// ─────────────────────────────────────────────────────────────────────────────
+function currentYY() { return String(new Date().getFullYear()).slice(-2); }
+function formatDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function autoCode(name) {
+  return name.trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3).padEnd(3, 'X');
+}
+function nextSeq(clientSpId, year) {
+  const existing = projects.filter(p => p.clientSpId === clientSpId && p.year === year);
+  if (!existing.length) return 1;
+  return Math.max(...existing.map(p => p.sequence)) + 1;
+}
+function fmtNumber(code, year, seq) {
+  return `${code}-${year}-${String(seq).padStart(3, '0')}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Loading / toast
+// ─────────────────────────────────────────────────────────────────────────────
+function setLoading(msg) {
+  const ov = document.getElementById('loading-overlay');
+  if (msg) { ov.classList.remove('hidden'); document.getElementById('loading-message').textContent = msg; }
+  else { ov.classList.add('hidden'); }
+}
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.toggle('error', isError);
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Render
+// ─────────────────────────────────────────────────────────────────────────────
+let sortCol = 'number', sortAsc = true;
+
+function renderClients() {
+  const list = document.getElementById('client-list');
+  const sel  = document.getElementById('gen-client');
+  const fsel = document.getElementById('filter-client');
+  const counts = {};
+  projects.forEach(p => { counts[p.clientSpId] = (counts[p.clientSpId] || 0) + 1; });
+
+  if (!clients.length) {
+    list.innerHTML = '<div class="empty-state">No clients yet.</div>';
+  } else {
+    list.innerHTML = clients.map(c => `
+      <div class="client-item">
+        <span class="code">${c.code}</span>
+        <span class="name">${c.name}</span>
+        <span class="count">${counts[c.spId] || 0}p</span>
+        <button class="btn btn-danger btn-sm" onclick="removeClient('${c.spId}')" title="Remove">✕</button>
+      </div>`).join('');
+  }
+
+  const curSel = sel.value;
+  sel.innerHTML = '<option value="">— select a client —</option>' +
+    clients.map(c => `<option value="${c.spId}" ${c.spId === curSel ? 'selected' : ''}>${c.name} (${c.code})</option>`).join('');
+
+  const curFilt = fsel.value;
+  fsel.innerHTML = '<option value="">All clients</option>' +
+    clients.map(c => `<option value="${c.spId}" ${c.spId === curFilt ? 'selected' : ''}>${c.name}</option>`).join('');
+}
+
+function renderLog() {
+  const search = document.getElementById('search-input').value.toLowerCase();
+  const fClient = document.getElementById('filter-client').value;
+
+  let rows = projects.filter(p => {
+    if (fClient && p.clientSpId !== fClient) return false;
+    if (search && !p.number.toLowerCase().includes(search) &&
+        !p.clientName.toLowerCase().includes(search) &&
+        !(p.projectName || '').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  rows.sort((a, b) => {
+    let av = a[sortCol] ?? '', bv = b[sortCol] ?? '';
+    if (sortCol === 'number') {
+      av = a.clientCode + a.year + String(a.sequence).padStart(5, '0');
+      bv = b.clientCode + b.year + String(b.sequence).padStart(5, '0');
+    }
+    if (sortCol === 'created') { av = new Date(av); bv = new Date(bv); }
+    if (av < bv) return sortAsc ? -1 : 1;
+    if (av > bv) return sortAsc ? 1 : -1;
+    return 0;
+  });
+
+  const tbody = document.getElementById('project-tbody');
+  const empty = document.getElementById('log-empty');
+
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    tbody.innerHTML = rows.map(p => `
+      <tr>
+        <td class="td-number">${p.number}</td>
+        <td><div class="td-client"><span class="chip">${p.clientCode}</span><span>${p.clientName}</span></div></td>
+        <td>${p.projectName || '<span style="color:var(--text-muted);font-style:italic;">—</span>'}</td>
+        <td>20${p.year}</td>
+        <td class="td-date">${formatDate(p.created)}</td>
+        <td style="text-align:right;white-space:nowrap;">
+          <button class="btn btn-ghost btn-sm" onclick="openEdit('${p.spId}')" title="Edit name">✎</button>
+          <button class="btn btn-danger btn-sm" onclick="openDelete('${p.spId}')" title="Delete">✕</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  const total = projects.length;
+  const shown = rows.length;
+  document.getElementById('log-count').textContent = `${total} project${total !== 1 ? 's' : ''}`;
+  document.getElementById('log-filter-info').textContent = shown < total ? `Showing ${shown} of ${total}` : '';
+  document.getElementById('project-count-header').textContent = `${total} project${total !== 1 ? 's' : ''}`;
+
+  // Footer — last project date
+  if (projects.length) {
+    const latest = projects.reduce((a, b) => new Date(a.created) > new Date(b.created) ? a : b);
+    document.getElementById('footer-last-project').textContent =
+      `Last project: ${latest.number} — ${formatDate(latest.created)}`;
+  } else {
+    document.getElementById('footer-last-project').textContent = '';
+  }
+
+  document.querySelectorAll('thead th[data-col]').forEach(th => {
+    th.classList.remove('sorted');
+    th.querySelector('.sort-arrow').textContent = '';
+  });
+  const active = document.querySelector(`thead th[data-col="${sortCol}"]`);
+  if (active) {
+    active.classList.add('sorted');
+    active.querySelector('.sort-arrow').textContent = sortAsc ? '▲' : '▼';
+  }
+}
+
+function render() { renderClients(); renderLog(); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Client actions
+// ─────────────────────────────────────────────────────────────────────────────
+document.getElementById('toggle-add-client').addEventListener('click', () => {
+  const f = document.getElementById('add-client-form');
+  f.classList.toggle('open');
+  if (f.classList.contains('open')) document.getElementById('new-client-name').focus();
+});
+document.getElementById('cancel-add-client').addEventListener('click', () => {
+  document.getElementById('add-client-form').classList.remove('open');
+  document.getElementById('new-client-name').value = '';
+  document.getElementById('new-client-code').value = '';
+});
+document.getElementById('new-client-name').addEventListener('input', function() {
+  const cf = document.getElementById('new-client-code');
+  if (!cf._manual) cf.value = autoCode(this.value);
+});
+document.getElementById('new-client-code').addEventListener('input', function() {
+  this._manual = !!this.value;
+  this.value = this.value.toUpperCase();
+});
+document.getElementById('save-client-btn').addEventListener('click', async () => {
+  const name = document.getElementById('new-client-name').value.trim();
+  const code = document.getElementById('new-client-code').value.trim().toUpperCase();
+  if (!name) { showToast('Enter a client name.', true); return; }
+  if (!code || code.length !== 3) { showToast('Code must be 3 characters.', true); return; }
+  if (clients.some(c => c.code === code)) { showToast(`Code "${code}" already in use.`, true); return; }
+  try {
+    setLoading('Saving client…');
+    const item = await createItem(_clientsListId, { Title: name, ClientCode: code });
+    clients.push({ spId: String(item.id), name, code });
+    render();
+    document.getElementById('new-client-name').value = '';
+    document.getElementById('new-client-code').value = '';
+    document.getElementById('new-client-code')._manual = false;
+    document.getElementById('add-client-form').classList.remove('open');
+    showToast(`Client "${name}" added.`);
+  } catch (e) {
+    showToast(e.message, true);
+  } finally {
+    setLoading(null);
+  }
+});
+
+function removeClient(spId) {
+  openDeleteClient(spId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Generate
+// ─────────────────────────────────────────────────────────────────────────────
+document.getElementById('gen-year').value = currentYY();
+document.getElementById('reset-year-btn').addEventListener('click', () => {
+  document.getElementById('gen-year').value = currentYY();
+});
+document.getElementById('gen-year').addEventListener('input', function() {
+  this.value = this.value.replace(/\D/g, '').slice(0, 2);
+});
+
+let lastGeneratedSpId = null;
+
+document.getElementById('generate-btn').addEventListener('click', async () => {
+  const clientSpId  = document.getElementById('gen-client').value;
+  const projectName = document.getElementById('gen-project-name').value.trim();
+  const year        = document.getElementById('gen-year').value.trim();
+
+  if (!clientSpId) { showToast('Please select a client.', true); return; }
+  if (!year || year.length !== 2) { showToast('Enter a valid 2-digit year.', true); return; }
+
+  const client = clients.find(c => c.spId === clientSpId);
+  if (!client) return;
+
+  const seq    = nextSeq(clientSpId, year);
+  const number = fmtNumber(client.code, year, seq);
+
+  try {
+    setLoading('Saving project number…');
+    const item = await createItem(_projectsListId, {
+      Title:       number,
+      ClientSpId:  clientSpId,
+      ClientCode:  client.code,
+      ClientName:  client.name,
+      ProjectName: projectName,
+      ProjYear:    year,
+      Sequence:    seq
+    });
+    const proj = {
+      spId: String(item.id), number,
+      clientSpId, clientCode: client.code, clientName: client.name,
+      projectName, year, sequence: seq,
+      created: item.fields?.Created || new Date().toISOString()
+    };
+    projects.push(proj);
+    lastGeneratedSpId = proj.spId;
+
+    document.getElementById('result-number').textContent = number;
+    document.getElementById('result-name').textContent = projectName ? `"${projectName}"` : '(no project name)';
+    document.getElementById('result-box').classList.add('visible');
+    document.getElementById('gen-project-name').value = '';
+    render();
+    showToast(`${number} created.`);
+  } catch (e) {
+    showToast(e.message, true);
+  } finally {
+    setLoading(null);
+  }
+});
+
+document.getElementById('copy-btn').addEventListener('click', () => {
+  const num = document.getElementById('result-number').textContent;
+  navigator.clipboard.writeText(num).then(() => showToast('Copied to clipboard.'));
+});
+
+document.getElementById('undo-btn').addEventListener('click', async () => {
+  if (!lastGeneratedSpId) { showToast('Nothing to undo.', true); return; }
+  const proj = projects.find(p => p.spId === lastGeneratedSpId);
+  if (!proj) { showToast('Nothing to undo.', true); return; }
+  if (!confirm(`Undo creation of ${proj.number}?`)) return;
+  try {
+    setLoading('Undoing…');
+    await deleteItem(_projectsListId, lastGeneratedSpId);
+    projects = projects.filter(p => p.spId !== lastGeneratedSpId);
+    lastGeneratedSpId = null;
+    document.getElementById('result-box').classList.remove('visible');
+    render();
+    showToast('Last project undone.');
+  } catch (e) {
+    showToast(e.message, true);
+  } finally {
+    setLoading(null);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sort / search / filter
+// ─────────────────────────────────────────────────────────────────────────────
+document.querySelectorAll('thead th[data-col]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (sortCol === col) sortAsc = !sortAsc;
+    else { sortCol = col; sortAsc = true; }
+    renderLog();
+  });
+});
+document.getElementById('search-input').addEventListener('input', renderLog);
+document.getElementById('filter-client').addEventListener('change', renderLog);
+document.getElementById('refresh-btn').addEventListener('click', async () => {
+  try {
+    setLoading('Refreshing…');
+    await loadAll();
+    render();
+    showToast('Refreshed.');
+  } catch (e) {
+    showToast(e.message, true);
+  } finally {
+    setLoading(null);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Random project name
+// ─────────────────────────────────────────────────────────────────────────────
+const NAME_ADJ  = ['Apex','Arctic','Atlas','Carbon','Cobalt','Coastal','Crimson','Delta',
+  'Eclipse','Ember','Forge','Granite','Horizon','Iron','Jade','Kinetic','Lunar','Marine',
+  'Nimbus','Nordic','Obsidian','Orbit','Pacific','Phantom','Quantum','Ridge','Sierra',
+  'Solar','Summit','Titan','Vanguard','Vector','Zenith'];
+const NAME_NOUN = ['Arc','Crest','Crown','Edge','Forge','Frame','Guard','Layer','Link',
+  'Loop','Mesh','Node','Path','Peak','Point','Pulse','Ridge','Ring','Shell','Shield',
+  'Slope','Span','Surge','Track','Trail','Vault','Wave','Wing','Zone'];
+
+function randomName() {
+  const adj  = NAME_ADJ[Math.floor(Math.random() * NAME_ADJ.length)];
+  const noun = NAME_NOUN[Math.floor(Math.random() * NAME_NOUN.length)];
+  return `${adj} ${noun}`;
+}
+document.getElementById('random-name-btn').addEventListener('click', () => {
+  document.getElementById('gen-project-name').value = randomName();
+  document.getElementById('gen-project-name').focus();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Delete modal (typing confirmation)
+// ─────────────────────────────────────────────────────────────────────────────
+let pendingDelete = null; // { type: 'project'|'client', id, confirmText, listId }
+
+function openDelete(spId) {
+  const p = projects.find(x => x.spId === spId);
+  if (!p) return;
+  pendingDelete = { type: 'project', id: spId, confirmText: p.number, listId: _projectsListId };
+  document.getElementById('delete-modal-title').textContent = 'Delete project?';
+  document.getElementById('delete-modal-desc').innerHTML =
+    `Permanently remove <strong>${p.number}</strong> from the log. The client's sequence counter will NOT roll back.`;
+  document.getElementById('delete-confirm-label').textContent = `Type "${p.number}" to confirm:`;
+  document.getElementById('delete-confirm-input').value = '';
+  document.getElementById('delete-confirm-input').placeholder = p.number;
+  document.getElementById('delete-confirm-btn').disabled = true;
+  document.getElementById('delete-modal').classList.add('open');
+  setTimeout(() => document.getElementById('delete-confirm-input').focus(), 50);
+}
+
+function openDeleteClient(spId) {
+  const c = clients.find(x => x.spId === spId);
+  if (!c) return;
+  const n = projects.filter(p => p.clientSpId === spId).length;
+  pendingDelete = { type: 'client', id: spId, confirmText: c.name, listId: _clientsListId };
+  document.getElementById('delete-modal-title').textContent = 'Remove client?';
+  document.getElementById('delete-modal-desc').innerHTML =
+    `Remove <strong>${c.name}</strong> from the client list.` +
+    (n ? ` Their <strong>${n}</strong> project record(s) will remain in the log.` : '');
+  document.getElementById('delete-confirm-label').textContent = `Type "${c.name}" to confirm:`;
+  document.getElementById('delete-confirm-input').value = '';
+  document.getElementById('delete-confirm-input').placeholder = c.name;
+  document.getElementById('delete-confirm-btn').disabled = true;
+  document.getElementById('delete-modal').classList.add('open');
+  setTimeout(() => document.getElementById('delete-confirm-input').focus(), 50);
+}
+
+document.getElementById('delete-confirm-input').addEventListener('input', function() {
+  document.getElementById('delete-confirm-btn').disabled =
+    this.value.trim() !== pendingDelete?.confirmText;
+});
+
+document.getElementById('delete-cancel-btn').addEventListener('click', () => {
+  document.getElementById('delete-modal').classList.remove('open');
+  pendingDelete = null;
+});
+
+document.getElementById('delete-confirm-btn').addEventListener('click', async () => {
+  if (!pendingDelete || document.getElementById('delete-confirm-btn').disabled) return;
+  const { type, id, listId } = pendingDelete;
+  document.getElementById('delete-modal').classList.remove('open');
+  pendingDelete = null;
+  try {
+    setLoading('Deleting…');
+    await deleteItem(listId, id);
+    if (type === 'project') {
+      projects = projects.filter(p => p.spId !== id);
+      showToast('Project deleted.');
+    } else {
+      clients = clients.filter(c => c.spId !== id);
+      showToast('Client removed.');
+    }
+    render();
+  } catch (e) { showToast(e.message, true); }
+  finally { setLoading(null); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Edit modal
+// ─────────────────────────────────────────────────────────────────────────────
+let pendingEditId = null;
+function openEdit(spId) {
+  pendingEditId = spId;
+  const p = projects.find(x => x.spId === spId);
+  document.getElementById('edit-name-input').value = p?.projectName || '';
+  document.getElementById('edit-modal').classList.add('open');
+  setTimeout(() => document.getElementById('edit-name-input').focus(), 50);
+}
+document.getElementById('edit-cancel-btn').addEventListener('click', () => {
+  document.getElementById('edit-modal').classList.remove('open'); pendingEditId = null;
+});
+document.getElementById('edit-save-btn').addEventListener('click', async () => {
+  if (!pendingEditId) return;
+  const id   = pendingEditId;
+  const name = document.getElementById('edit-name-input').value.trim();
+  document.getElementById('edit-modal').classList.remove('open');
+  pendingEditId = null;
+  try {
+    setLoading('Saving…');
+    await updateItemFields(_projectsListId, id, { ProjectName: name });
+    const p = projects.find(x => x.spId === id);
+    if (p) p.projectName = name;
+    renderLog(); showToast('Project name updated.');
+  } catch (e) { showToast(e.message, true); }
+  finally { setLoading(null); }
+});
+document.getElementById('edit-name-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter')  document.getElementById('edit-save-btn').click();
+  if (e.key === 'Escape') document.getElementById('edit-cancel-btn').click();
+});
+document.getElementById('delete-modal').addEventListener('click', function(e) {
+  if (e.target === this) { this.classList.remove('open'); pendingDelete = null; }
+});
+document.getElementById('edit-modal').addEventListener('click', function(e) {
+  if (e.target === this) { this.classList.remove('open'); pendingEditId = null; }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Export CSV
+// ─────────────────────────────────────────────────────────────────────────────
+document.getElementById('export-csv-btn').addEventListener('click', () => {
+  const headers = ['Project Number','Client Code','Client Name','Project Name','Year','Sequence','Created'];
+  const rows = projects.map(p => [
+    p.number, p.clientCode, p.clientName,
+    `"${(p.projectName||'').replace(/"/g,'""')}"`,
+    '20'+p.year, p.sequence,
+    new Date(p.created).toLocaleDateString('en-GB')
+  ]);
+  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'HSDL_Projects.csv';
+  a.click();
+  showToast('CSV exported.');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Auth flow (redirect — no popups)
+// ─────────────────────────────────────────────────────────────────────────────
+document.getElementById('sign-in-btn').addEventListener('click', async () => {
+  document.getElementById('login-error').style.display = 'none';
+  try {
+    await msalInstance.loginRedirect({ scopes: SCOPES });
+  } catch (e) {
+    document.getElementById('login-error').textContent = e.message;
+    document.getElementById('login-error').style.display = 'block';
+  }
+});
+
+document.getElementById('sign-out-btn').addEventListener('click', () => {
+  msalInstance.logoutRedirect();
+});
+
+document.getElementById('sign-out-btn').style.display = 'none';
+
+async function bootApp() {
+  setLoading('Connecting to SharePoint…');
+  try {
+    await loadAll();
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length) {
+      document.getElementById('user-info').textContent = accounts[0].name || accounts[0].username;
+      document.getElementById('sign-out-btn').style.display = '';
+    }
+    document.getElementById('login-screen').classList.add('hidden');
+    render();
+  } catch (e) {
+    showToast(e.message, true);
+    document.getElementById('login-screen').classList.remove('hidden');
+  } finally {
+    setLoading(null);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────────────────────────────────────
+(async function init() {
+  try {
+    const response = await msalInstance.handleRedirectPromise();
+    if (response) {
+      // Returning from a redirect login — boot the app
+      await bootApp();
+      return;
+    }
+  } catch (e) {
+    setLoading(null);
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('login-error').textContent = e.message;
+    document.getElementById('login-error').style.display = 'block';
+    return;
+  }
+
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length) {
+    await bootApp();
+  } else {
+    setLoading(null);
+    document.getElementById('login-screen').classList.remove('hidden');
+  }
+})();
+</script>
+</body>
+</html>
