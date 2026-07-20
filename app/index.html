@@ -285,6 +285,22 @@
     }
     .btn-dice:hover { background: var(--accent-light); }
 
+    /* ── Status chips ── */
+    .status-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+      letter-spacing: 0.04em; cursor: pointer; border: none;
+      transition: opacity 0.15s, transform 0.1s; user-select: none;
+    }
+    .status-chip:hover { opacity: 0.8; transform: scale(0.97); }
+    .status-chip:active { transform: scale(0.94); }
+    .status-pending {
+      background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;
+    }
+    .status-active {
+      background: var(--accent-light); color: var(--accent); border: 1px solid #b5d0bf;
+    }
+
     /* ── Delete confirmation input ── */
     .delete-confirm-wrap { margin-top: 12px; }
     .delete-confirm-wrap label { color: var(--danger); }
@@ -441,6 +457,9 @@
       <h2>Project Log</h2>
       <div class="log-controls">
         <input type="text" id="search-input" placeholder="Search…" style="width:160px;" />
+        <select id="filter-year" style="width:100px;">
+          <option value="">All years</option>
+        </select>
         <select id="filter-client" style="width:130px;">
           <option value="">All clients</option>
         </select>
@@ -456,6 +475,7 @@
             <th data-col="clientName">Client <span class="sort-arrow"></span></th>
             <th data-col="projectName">Project Name <span class="sort-arrow"></span></th>
             <th data-col="year">Year <span class="sort-arrow"></span></th>
+            <th data-col="status">Status <span class="sort-arrow"></span></th>
             <th data-col="creatorName">Created By <span class="sort-arrow"></span></th>
             <th data-col="created">Date <span class="sort-arrow"></span></th>
             <th></th>
@@ -659,6 +679,7 @@ async function loadAll() {
     year:        i.fields.ProjYear || '',
     sequence:    i.fields.Sequence || 0,
     creatorName: i.fields.CreatorName || '',
+    status:      i.fields.Status || 'Pending',
     created:     i.fields.Created || i.createdDateTime || ''
   }));
 }
@@ -674,10 +695,23 @@ function formatDate(iso) {
 function autoCode(name) {
   return name.trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3).padEnd(3, 'X');
 }
-function nextSeq(clientSpId, year) {
+function nextSeqLocal(clientSpId, year) {
   const existing = projects.filter(p => p.clientSpId === clientSpId && p.year === year);
   if (!existing.length) return 1;
   return Math.max(...existing.map(p => p.sequence)) + 1;
+}
+
+async function getLatestSeqFromSharePoint(clientSpId, year) {
+  // Always fetch fresh from SharePoint at generate time to prevent duplicate numbers
+  // when two users generate simultaneously
+  const sid = await getSiteId();
+  const data = await graphFetch(
+    `${GRAPH}/sites/${sid}/lists/${_projectsListId}/items?expand=fields` +
+    `&$filter=fields/ClientSpId eq '${clientSpId}' and fields/ProjYear eq '${year}'` +
+    `&$select=fields/Sequence&$top=5000`
+  );
+  if (!data.value.length) return 0;
+  return Math.max(...data.value.map(i => i.fields?.Sequence || 0));
 }
 function fmtNumber(code, year, seq) {
   return `${code}-${year}-${String(seq).padStart(3, '0')}`;
@@ -733,11 +767,20 @@ function renderClients() {
 }
 
 function renderLog() {
-  const search = document.getElementById('search-input').value.toLowerCase();
+  const search  = document.getElementById('search-input').value.toLowerCase();
   const fClient = document.getElementById('filter-client').value;
+  const fYear   = document.getElementById('filter-year').value;
+
+  // Rebuild year dropdown from current projects
+  const yearSel = document.getElementById('filter-year');
+  const curYear = yearSel.value;
+  const years = [...new Set(projects.map(p => p.year))].sort().reverse();
+  yearSel.innerHTML = '<option value="">All years</option>' +
+    years.map(y => `<option value="${y}" ${y === curYear ? 'selected' : ''}>20${y}</option>`).join('');
 
   let rows = projects.filter(p => {
     if (fClient && p.clientSpId !== fClient) return false;
+    if (fYear && p.year !== fYear) return false;
     if (search && !p.number.toLowerCase().includes(search) &&
         !p.clientName.toLowerCase().includes(search) &&
         !(p.projectName || '').toLowerCase().includes(search)) return false;
@@ -770,6 +813,12 @@ function renderLog() {
         <td><div class="td-client"><span class="chip">${p.clientCode}</span><span>${p.clientName}</span></div></td>
         <td>${p.projectName || '<span style="color:var(--text-muted);font-style:italic;">—</span>'}</td>
         <td>20${p.year}</td>
+        <td>
+          <button class="status-chip ${p.status === 'Active' ? 'status-active' : 'status-pending'}"
+            onclick="toggleStatus('${p.spId}')" title="Click to toggle status">
+            ${p.status === 'Active' ? '● Active' : '○ Pending'}
+          </button>
+        </td>
         <td>${p.creatorName || '<span style="color:var(--text-muted);font-style:italic;">—</span>'}</td>
         <td class="td-date">${formatDate(p.created)}</td>
         <td style="text-align:right;white-space:nowrap;">
@@ -881,10 +930,11 @@ document.getElementById('generate-btn').addEventListener('click', async () => {
   const client = clients.find(c => c.spId === clientSpId);
   if (!client) return;
 
-  const seq    = nextSeq(clientSpId, year);
-  const number = fmtNumber(client.code, year, seq);
-
   try {
+    setLoading('Checking sequence…');
+    const latestSeq = await getLatestSeqFromSharePoint(clientSpId, year);
+    const seq = latestSeq + 1;
+    const number = fmtNumber(client.code, year, seq);
     setLoading('Saving project number…');
     const item = await createItem(_projectsListId, {
       Title:        number,
@@ -894,12 +944,13 @@ document.getElementById('generate-btn').addEventListener('click', async () => {
       ProjectName:  projectName,
       ProjYear:     year,
       Sequence:     seq,
-      CreatorName:  creator
+      CreatorName:  creator,
+      Status:       'Pending'
     });
     const proj = {
       spId: String(item.id), number,
       clientSpId, clientCode: client.code, clientName: client.name,
-      projectName, year, sequence: seq, creatorName: creator,
+      projectName, year, sequence: seq, creatorName: creator, status: 'Pending',
       created: item.fields?.Created || new Date().toISOString()
     };
     projects.push(proj);
@@ -955,6 +1006,7 @@ document.querySelectorAll('thead th[data-col]').forEach(th => {
   });
 });
 document.getElementById('search-input').addEventListener('input', renderLog);
+document.getElementById('filter-year').addEventListener('change', renderLog);
 document.getElementById('filter-client').addEventListener('change', renderLog);
 document.getElementById('refresh-btn').addEventListener('click', async () => {
   try {
@@ -968,6 +1020,21 @@ document.getElementById('refresh-btn').addEventListener('click', async () => {
     setLoading(null);
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Status toggle
+// ─────────────────────────────────────────────────────────────────────────────
+async function toggleStatus(spId) {
+  const p = projects.find(x => x.spId === spId);
+  if (!p) return;
+  const newStatus = p.status === 'Active' ? 'Pending' : 'Active';
+  try {
+    await updateItemFields(_projectsListId, spId, { Status: newStatus });
+    p.status = newStatus;
+    renderLog();
+    showToast(`${p.number} set to ${newStatus}.`);
+  } catch (e) { showToast(e.message, true); }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Random project name
