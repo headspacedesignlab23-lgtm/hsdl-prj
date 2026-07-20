@@ -503,8 +503,9 @@ async function getToken() {
     const r = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
     return r.accessToken;
   } catch {
-    const r = await msalInstance.acquireTokenPopup({ scopes: SCOPES });
-    return r.accessToken;
+    // Silent failed — redirect to re-authenticate
+    await msalInstance.acquireTokenRedirect({ scopes: SCOPES, account: accounts[0] });
+    throw new Error('Redirecting for re-authentication…');
   }
 }
 
@@ -1012,13 +1013,12 @@ document.getElementById('export-csv-btn').addEventListener('click', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Auth flow
+// Auth flow (redirect — no popups)
 // ─────────────────────────────────────────────────────────────────────────────
 document.getElementById('sign-in-btn').addEventListener('click', async () => {
   document.getElementById('login-error').style.display = 'none';
   try {
-    await msalInstance.loginPopup({ scopes: SCOPES });
-    await bootApp();
+    await msalInstance.loginRedirect({ scopes: SCOPES });
   } catch (e) {
     document.getElementById('login-error').textContent = e.message;
     document.getElementById('login-error').style.display = 'block';
@@ -1026,7 +1026,7 @@ document.getElementById('sign-in-btn').addEventListener('click', async () => {
 });
 
 document.getElementById('sign-out-btn').addEventListener('click', () => {
-  msalInstance.logoutPopup();
+  msalInstance.logoutRedirect();
 });
 
 document.getElementById('sign-out-btn').style.display = 'none';
@@ -1054,16 +1054,20 @@ async function bootApp() {
 // Init
 // ─────────────────────────────────────────────────────────────────────────────
 (async function init() {
-  // If we're loaded inside a popup (OAuth redirect), just handle the response
-  // and let MSAL close the popup — don't boot the full app
-  if (window.opener && window.opener !== window) {
-    try { await msalInstance.handleRedirectPromise(); } catch (e) { console.error(e); }
+  try {
+    const response = await msalInstance.handleRedirectPromise();
+    if (response) {
+      // Returning from a redirect login — boot the app
+      await bootApp();
+      return;
+    }
+  } catch (e) {
+    setLoading(null);
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('login-error').textContent = e.message;
+    document.getElementById('login-error').style.display = 'block';
     return;
   }
-
-  try {
-    await msalInstance.handleRedirectPromise();
-  } catch {}
 
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length) {
