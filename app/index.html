@@ -489,7 +489,7 @@ const msalConfig = {
   auth: {
     clientId: HSDL_CONFIG.clientId,
     authority: `https://login.microsoftonline.com/${HSDL_CONFIG.tenantId}`,
-    redirectUri: window.location.origin + window.location.pathname
+    redirectUri: new URL('redirect.html', window.location.href).href
   },
   cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true }
 };

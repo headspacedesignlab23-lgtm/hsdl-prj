@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Signing in…</title>
+  <script src="msal-browser.min.js"></script>
+</head>
+<body>
+  <script>
+    // This page exists solely to handle the MSAL popup redirect.
+    // It loads inside the popup window, processes the auth response, and closes.
+    (async function () {
+      try {
+        const cfg = window.opener && window.opener.HSDL_CONFIG;
+        if (!cfg) return;
+        const instance = new msal.PublicClientApplication({
+          auth: {
+            clientId: cfg.clientId,
+            authority: `https://login.microsoftonline.com/${cfg.tenantId}`,
+            redirectUri: window.location.href.split('?')[0].split('#')[0]
+          },
+          cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true }
+        });
+        await instance.handleRedirectPromise();
+      } catch (e) {
+        console.error('Redirect handling error:', e);
+      }
+    })();
+  </script>
+</body>
+</html>
