@@ -128,7 +128,7 @@
     .field-row { display: grid; grid-template-columns: 1fr 80px; gap: 8px; }
 
     /* ── Client list ── */
-    .client-list { display: flex; flex-direction: column; gap: 6px; }
+    .client-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
     .client-item {
       display: flex; align-items: center;
       padding: 9px 12px; background: var(--surface2);
@@ -327,7 +327,7 @@
 <div class="layout">
 
   <!-- LEFT -->
-  <div style="display:flex;flex-direction:column;gap:20px;">
+  <div style="display:flex;flex-direction:column;gap:20px;position:sticky;top:80px;align-self:start;">
 
     <!-- Clients -->
     <div class="panel">
