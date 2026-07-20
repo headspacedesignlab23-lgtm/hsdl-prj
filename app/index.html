@@ -264,9 +264,37 @@
     .modal h3 { font-size: 15px; margin-bottom: 16px; }
     .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 
+    /* ── Footer ── */
+    footer {
+      position: fixed; bottom: 0; left: 0; right: 0; height: 36px;
+      background: var(--surface2); border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; font-size: 11px; color: var(--text-muted);
+      letter-spacing: 0.03em; z-index: 40;
+    }
+    .layout { padding-bottom: 60px; }
+
+    /* ── Random name button ── */
+    .name-field-wrap { display: flex; gap: 6px; }
+    .name-field-wrap input { flex: 1; }
+    .btn-dice {
+      flex-shrink: 0; width: 36px; height: 36px; border-radius: var(--radius);
+      border: 1px solid var(--border); background: var(--surface2);
+      font-size: 16px; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; transition: background 0.15s;
+    }
+    .btn-dice:hover { background: var(--accent-light); }
+
+    /* ── Delete confirmation input ── */
+    .delete-confirm-wrap { margin-top: 12px; }
+    .delete-confirm-wrap label { color: var(--danger); }
+    .delete-confirm-wrap input { border-color: var(--border); }
+    .delete-confirm-wrap input:focus { border-color: var(--danger); }
+    #delete-confirm-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
     /* ── Toast ── */
     #toast {
-      position: fixed; bottom: 24px; right: 24px;
+      position: fixed; bottom: 44px; right: 24px;
       background: var(--accent); color: #fff; padding: 10px 18px;
       border-radius: var(--radius); font-size: 13px; font-weight: 500;
       opacity: 0; transform: translateY(8px);
@@ -316,7 +344,10 @@
 
 <!-- ── Main app ── -->
 <header>
-  <h1>HSDL — Project Number Generator</h1>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <img src="logo.png" alt="HSDL" style="height:26px;opacity:0.92;filter:brightness(0) invert(1);" onerror="this.style.display='none'" />
+    <h1>Project Number Generator</h1>
+  </div>
   <div class="header-right">
     <span id="user-info"></span>
     <button id="sign-out-btn">Sign out</button>
@@ -370,8 +401,11 @@
           </select>
         </div>
         <div class="field">
-          <label>Project Name</label>
-          <input type="text" id="gen-project-name" placeholder="e.g. Road Helmet Redesign" autocomplete="off" />
+          <label>Project Name <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional — click 🎲 to suggest one)</span></label>
+          <div class="name-field-wrap">
+            <input type="text" id="gen-project-name" placeholder="e.g. Road Helmet Redesign" autocomplete="off" />
+            <button class="btn-dice" id="random-name-btn" title="Suggest a random project name">🎲</button>
+          </div>
         </div>
         <div class="field field-row">
           <div>
@@ -439,14 +473,15 @@
 <!-- Delete modal -->
 <div class="modal-overlay" id="delete-modal">
   <div class="modal">
-    <h3>Delete project?</h3>
-    <p style="font-size:13px;color:var(--text-muted);">
-      Permanently remove <strong id="delete-modal-number"></strong> from the log.
-      The client's sequence counter will NOT roll back.
-    </p>
+    <h3 id="delete-modal-title">Confirm deletion</h3>
+    <p style="font-size:13px;color:var(--text-muted);" id="delete-modal-desc"></p>
+    <div class="delete-confirm-wrap">
+      <label id="delete-confirm-label">Type to confirm</label>
+      <input type="text" id="delete-confirm-input" placeholder="" autocomplete="off" spellcheck="false" />
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="delete-cancel-btn">Cancel</button>
-      <button class="btn btn-sm" id="delete-confirm-btn" style="background:var(--danger);color:#fff;">Delete</button>
+      <button class="btn btn-sm" id="delete-confirm-btn" style="background:var(--danger);color:#fff;" disabled>Delete</button>
     </div>
   </div>
 </div>
@@ -465,6 +500,11 @@
     </div>
   </div>
 </div>
+
+<footer>
+  <span>Private &amp; Confidential — Headspace Design Lab</span>
+  <span id="footer-last-project"></span>
+</footer>
 
 <div id="toast"></div>
 
@@ -738,6 +778,15 @@ function renderLog() {
   document.getElementById('log-filter-info').textContent = shown < total ? `Showing ${shown} of ${total}` : '';
   document.getElementById('project-count-header').textContent = `${total} project${total !== 1 ? 's' : ''}`;
 
+  // Footer — last project date
+  if (projects.length) {
+    const latest = projects.reduce((a, b) => new Date(a.created) > new Date(b.created) ? a : b);
+    document.getElementById('footer-last-project').textContent =
+      `Last project: ${latest.number} — ${formatDate(latest.created)}`;
+  } else {
+    document.getElementById('footer-last-project').textContent = '';
+  }
+
   document.querySelectorAll('thead th[data-col]').forEach(th => {
     th.classList.remove('sorted');
     th.querySelector('.sort-arrow').textContent = '';
@@ -795,25 +844,8 @@ document.getElementById('save-client-btn').addEventListener('click', async () =>
   }
 });
 
-async function removeClient(spId) {
-  const c = clients.find(x => x.spId === spId);
-  if (!c) return;
-  const n = projects.filter(p => p.clientSpId === spId).length;
-  const msg = n
-    ? `Remove "${c.name}"? Their ${n} project record(s) will remain in the log.`
-    : `Remove client "${c.name}"?`;
-  if (!confirm(msg)) return;
-  try {
-    setLoading('Removing client…');
-    await deleteItem(_clientsListId, spId);
-    clients = clients.filter(x => x.spId !== spId);
-    render();
-    showToast('Client removed.');
-  } catch (e) {
-    showToast(e.message, true);
-  } finally {
-    setLoading(null);
-  }
+function removeClient(spId) {
+  openDeleteClient(spId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -928,28 +960,89 @@ document.getElementById('refresh-btn').addEventListener('click', async () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Delete modal
+// Random project name
 // ─────────────────────────────────────────────────────────────────────────────
-let pendingDeleteId = null;
-function openDelete(spId) {
-  pendingDeleteId = spId;
-  const p = projects.find(x => x.spId === spId);
-  document.getElementById('delete-modal-number').textContent = p?.number || spId;
-  document.getElementById('delete-modal').classList.add('open');
+const NAME_ADJ  = ['Apex','Arctic','Atlas','Carbon','Cobalt','Coastal','Crimson','Delta',
+  'Eclipse','Ember','Forge','Granite','Horizon','Iron','Jade','Kinetic','Lunar','Marine',
+  'Nimbus','Nordic','Obsidian','Orbit','Pacific','Phantom','Quantum','Ridge','Sierra',
+  'Solar','Summit','Titan','Vanguard','Vector','Zenith'];
+const NAME_NOUN = ['Arc','Crest','Crown','Edge','Forge','Frame','Guard','Layer','Link',
+  'Loop','Mesh','Node','Path','Peak','Point','Pulse','Ridge','Ring','Shell','Shield',
+  'Slope','Span','Surge','Track','Trail','Vault','Wave','Wing','Zone'];
+
+function randomName() {
+  const adj  = NAME_ADJ[Math.floor(Math.random() * NAME_ADJ.length)];
+  const noun = NAME_NOUN[Math.floor(Math.random() * NAME_NOUN.length)];
+  return `${adj} ${noun}`;
 }
-document.getElementById('delete-cancel-btn').addEventListener('click', () => {
-  document.getElementById('delete-modal').classList.remove('open'); pendingDeleteId = null;
+document.getElementById('random-name-btn').addEventListener('click', () => {
+  document.getElementById('gen-project-name').value = randomName();
+  document.getElementById('gen-project-name').focus();
 });
-document.getElementById('delete-confirm-btn').addEventListener('click', async () => {
-  if (!pendingDeleteId) return;
-  const id = pendingDeleteId;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Delete modal (typing confirmation)
+// ─────────────────────────────────────────────────────────────────────────────
+let pendingDelete = null; // { type: 'project'|'client', id, confirmText, listId }
+
+function openDelete(spId) {
+  const p = projects.find(x => x.spId === spId);
+  if (!p) return;
+  pendingDelete = { type: 'project', id: spId, confirmText: p.number, listId: _projectsListId };
+  document.getElementById('delete-modal-title').textContent = 'Delete project?';
+  document.getElementById('delete-modal-desc').innerHTML =
+    `Permanently remove <strong>${p.number}</strong> from the log. The client's sequence counter will NOT roll back.`;
+  document.getElementById('delete-confirm-label').textContent = `Type "${p.number}" to confirm:`;
+  document.getElementById('delete-confirm-input').value = '';
+  document.getElementById('delete-confirm-input').placeholder = p.number;
+  document.getElementById('delete-confirm-btn').disabled = true;
+  document.getElementById('delete-modal').classList.add('open');
+  setTimeout(() => document.getElementById('delete-confirm-input').focus(), 50);
+}
+
+function openDeleteClient(spId) {
+  const c = clients.find(x => x.spId === spId);
+  if (!c) return;
+  const n = projects.filter(p => p.clientSpId === spId).length;
+  pendingDelete = { type: 'client', id: spId, confirmText: c.name, listId: _clientsListId };
+  document.getElementById('delete-modal-title').textContent = 'Remove client?';
+  document.getElementById('delete-modal-desc').innerHTML =
+    `Remove <strong>${c.name}</strong> from the client list.` +
+    (n ? ` Their <strong>${n}</strong> project record(s) will remain in the log.` : '');
+  document.getElementById('delete-confirm-label').textContent = `Type "${c.name}" to confirm:`;
+  document.getElementById('delete-confirm-input').value = '';
+  document.getElementById('delete-confirm-input').placeholder = c.name;
+  document.getElementById('delete-confirm-btn').disabled = true;
+  document.getElementById('delete-modal').classList.add('open');
+  setTimeout(() => document.getElementById('delete-confirm-input').focus(), 50);
+}
+
+document.getElementById('delete-confirm-input').addEventListener('input', function() {
+  document.getElementById('delete-confirm-btn').disabled =
+    this.value.trim() !== pendingDelete?.confirmText;
+});
+
+document.getElementById('delete-cancel-btn').addEventListener('click', () => {
   document.getElementById('delete-modal').classList.remove('open');
-  pendingDeleteId = null;
+  pendingDelete = null;
+});
+
+document.getElementById('delete-confirm-btn').addEventListener('click', async () => {
+  if (!pendingDelete || document.getElementById('delete-confirm-btn').disabled) return;
+  const { type, id, listId } = pendingDelete;
+  document.getElementById('delete-modal').classList.remove('open');
+  pendingDelete = null;
   try {
     setLoading('Deleting…');
-    await deleteItem(_projectsListId, id);
-    projects = projects.filter(p => p.spId !== id);
-    render(); showToast('Project deleted.');
+    await deleteItem(listId, id);
+    if (type === 'project') {
+      projects = projects.filter(p => p.spId !== id);
+      showToast('Project deleted.');
+    } else {
+      clients = clients.filter(c => c.spId !== id);
+      showToast('Client removed.');
+    }
+    render();
   } catch (e) { showToast(e.message, true); }
   finally { setLoading(null); }
 });
@@ -987,10 +1080,11 @@ document.getElementById('edit-name-input').addEventListener('keydown', e => {
   if (e.key === 'Enter')  document.getElementById('edit-save-btn').click();
   if (e.key === 'Escape') document.getElementById('edit-cancel-btn').click();
 });
-['delete-modal','edit-modal'].forEach(id => {
-  document.getElementById(id).addEventListener('click', function(e) {
-    if (e.target === this) { this.classList.remove('open'); pendingDeleteId = pendingEditId = null; }
-  });
+document.getElementById('delete-modal').addEventListener('click', function(e) {
+  if (e.target === this) { this.classList.remove('open'); pendingDelete = null; }
+});
+document.getElementById('edit-modal').addEventListener('click', function(e) {
+  if (e.target === this) { this.classList.remove('open'); pendingEditId = null; }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
