@@ -13,7 +13,7 @@ window.HSDL_CONFIG = {
 
   // Full URL of the SharePoint site where your lists will live
   // e.g. "https://headspacedl.sharepoint.com/sites/HSDL"
-  siteUrl: "https://headspacedl.sharepoint.com/sites/headspacefounders",
+  siteUrl: "https://headspacedl.sharepoint.com/:u:/r/sites/headspacefounders/SitePages/Home.aspx?csf=1&web=1&share=IQCRz3mHQju-R7pxxJm_5RHjActyep5DtZDJ88DnSBExXtU&e=HK447H",
 
   // These match the List names you create in SharePoint (don't change unless you rename the lists)
   clientsListName:  "HSDL Clients",
