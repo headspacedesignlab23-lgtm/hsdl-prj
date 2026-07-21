@@ -706,9 +706,9 @@ async function getLatestSeqFromSharePoint(clientSpId, year) {
   // when two users generate simultaneously
   const sid = await getSiteId();
   const data = await graphFetch(
-    `${GRAPH}/sites/${sid}/lists/${_projectsListId}/items?expand=fields` +
+    `${GRAPH}/sites/${sid}/lists/${_projectsListId}/items?$expand=fields($select=Sequence,ClientSpId,ProjYear)` +
     `&$filter=fields/ClientSpId eq '${clientSpId}' and fields/ProjYear eq '${year}'` +
-    `&$select=fields/Sequence&$top=5000`
+    `&$top=5000`
   );
   if (!data.value.length) return 0;
   return Math.max(...data.value.map(i => i.fields?.Sequence || 0));
