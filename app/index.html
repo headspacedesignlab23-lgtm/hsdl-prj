@@ -708,7 +708,8 @@ async function getLatestSeqFromSharePoint(clientSpId, year) {
   const data = await graphFetch(
     `${GRAPH}/sites/${sid}/lists/${_projectsListId}/items?$expand=fields($select=Sequence,ClientSpId,ProjYear)` +
     `&$filter=fields/ClientSpId eq '${clientSpId}' and fields/ProjYear eq '${year}'` +
-    `&$top=5000`
+    `&$top=5000`,
+    { headers: { 'Prefer': 'HonorNonIndexedQueriesWarningMayFailRandomly' } }
   );
   if (!data.value.length) return 0;
   return Math.max(...data.value.map(i => i.fields?.Sequence || 0));
