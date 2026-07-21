@@ -441,9 +441,10 @@
           <div class="result-label">Project Number</div>
           <div class="result-number" id="result-number">—</div>
           <div class="result-name" id="result-name"></div>
-          <div style="margin-top:12px;display:flex;gap:8px;">
+          <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
             <button class="btn btn-ghost btn-sm" id="copy-btn">Copy</button>
             <button class="btn btn-danger btn-sm" id="undo-btn">Undo</button>
+            <span id="undo-countdown" style="font-size:0.75rem;color:var(--text-muted);display:none;">30s</span>
           </div>
         </div>
       </div>
@@ -917,6 +918,41 @@ document.getElementById('gen-year').addEventListener('input', function() {
 });
 
 let lastGeneratedSpId = null;
+let _undoTimer = null;
+let _undoCountdownInterval = null;
+
+function startUndoTimer() {
+  clearUndoTimer();
+  const btn = document.getElementById('undo-btn');
+  const countdown = document.getElementById('undo-countdown');
+  let remaining = 30;
+  countdown.textContent = `${remaining}s`;
+  countdown.style.display = 'inline';
+  btn.disabled = false;
+
+  _undoCountdownInterval = setInterval(() => {
+    remaining--;
+    countdown.textContent = `${remaining}s`;
+    if (remaining <= 5) countdown.style.color = 'var(--danger, #c0392b)';
+  }, 1000);
+
+  _undoTimer = setTimeout(() => {
+    clearUndoTimer();
+    lastGeneratedSpId = null;
+    btn.disabled = true;
+    countdown.style.display = 'none';
+    countdown.style.color = '';
+  }, 30000);
+}
+
+function clearUndoTimer() {
+  clearTimeout(_undoTimer);
+  clearInterval(_undoCountdownInterval);
+  _undoTimer = null;
+  _undoCountdownInterval = null;
+  const countdown = document.getElementById('undo-countdown');
+  if (countdown) { countdown.style.display = 'none'; countdown.style.color = ''; }
+}
 
 document.getElementById('generate-btn').addEventListener('click', async () => {
   const clientSpId  = document.getElementById('gen-client').value;
@@ -956,6 +992,7 @@ document.getElementById('generate-btn').addEventListener('click', async () => {
     };
     projects.push(proj);
     lastGeneratedSpId = proj.spId;
+    startUndoTimer();
 
     document.getElementById('result-number').textContent = number;
     document.getElementById('result-name').textContent = projectName ? `"${projectName}"` : '(no project name)';
@@ -985,6 +1022,7 @@ document.getElementById('undo-btn').addEventListener('click', async () => {
     await deleteItem(_projectsListId, lastGeneratedSpId);
     projects = projects.filter(p => p.spId !== lastGeneratedSpId);
     lastGeneratedSpId = null;
+    clearUndoTimer();
     document.getElementById('result-box').classList.remove('visible');
     render();
     showToast('Last project undone.');
